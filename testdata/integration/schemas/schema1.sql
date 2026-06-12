@@ -1,0 +1,70 @@
+DROP DATABASE IF EXISTS svcomp_source;
+CREATE DATABASE svcomp_source;
+USE svcomp_source;
+
+CREATE TABLE users (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(100) NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE pets (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  species VARCHAR(40) NOT NULL,
+  created_at DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_pets_user_id (user_id),
+  CONSTRAINT fk_pets_user FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+CREATE TABLE audit_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  message VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+
+CREATE VIEW v_active_users AS
+SELECT id, name
+FROM users
+WHERE active = 1;
+
+DELIMITER $$
+CREATE FUNCTION fn_total_pets()
+RETURNS INT
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+  DECLARE total INT DEFAULT 0;
+  SELECT COUNT(*) INTO total FROM pets;
+  RETURN total;
+END$$
+
+CREATE PROCEDURE sp_touch_users()
+MODIFIES SQL DATA
+BEGIN
+  UPDATE users
+  SET updated_at = NOW()
+  WHERE active = 1;
+END$$
+
+CREATE TRIGGER trg_pets_bi
+BEFORE INSERT ON pets
+FOR EACH ROW
+BEGIN
+  IF NEW.created_at IS NULL THEN
+    SET NEW.created_at = NOW();
+  END IF;
+END$$
+
+CREATE EVENT ev_cleanup_audit
+ON SCHEDULE EVERY 1 DAY
+DO
+  DELETE FROM audit_logs
+  WHERE created_at < (NOW() - INTERVAL 30 DAY)$$
+DELIMITER ;
