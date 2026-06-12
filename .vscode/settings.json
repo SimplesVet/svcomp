@@ -1,0 +1,11 @@
+{
+  "terminal.integrated.env.linux": {
+    "GOTOOLCHAIN": "go1.23.4"
+  },
+  "go.toolsEnvVars": {
+    "GOTOOLCHAIN": "go1.23.4"
+  },
+  "go.testEnvVars": {
+    "GOTOOLCHAIN": "go1.23.4"
+  }
+}
