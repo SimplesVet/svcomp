@@ -20,6 +20,16 @@ func TestGenerateNonTableCreateAndDelete(t *testing.T) {
 			Kind:       types.KindView,
 			Definition: "CREATE VIEW v_clientes AS SELECT 1",
 		},
+		types.ObjectKey(types.KindTable, "clientes"): {
+			Name:       "clientes",
+			Kind:       types.KindTable,
+			Definition: "CREATE TABLE clientes (id INT)",
+		},
+		types.ObjectKey(types.KindTable, "empresa"): {
+			Name:       "empresa",
+			Kind:       types.KindTable,
+			Definition: "CREATE TABLE empresa (id INT, criado_em TIMESTAMP)",
+		},
 	}
 	target := map[string]types.DBObject{
 		types.ObjectKey(types.KindProcedure, "p_old"): {
@@ -27,10 +37,18 @@ func TestGenerateNonTableCreateAndDelete(t *testing.T) {
 			Kind:       types.KindProcedure,
 			Definition: "CREATE PROCEDURE p_old() SELECT 1",
 		},
+		types.ObjectKey(types.KindTable, "empresa"): {
+			Name:       "empresa",
+			Kind:       types.KindTable,
+			Definition: "CREATE TABLE empresa (id INT)",
+		},
 	}
 
 	diffs := []types.DiffResult{
 		{Object: source[types.ObjectKey(types.KindView, "v_clientes")], Action: types.ActionCreate},
+		{Object: source[types.ObjectKey(types.KindTable, "clientes")], Action: types.ActionCreate},
+		{Object: source[types.ObjectKey(types.KindTable, "empresa")], Action: types.ActionCreate},
+		{Object: target[types.ObjectKey(types.KindTable, "empresa")], Action: types.ActionUpdate},
 		{Object: target[types.ObjectKey(types.KindProcedure, "p_old")], Action: types.ActionDelete},
 	}
 
@@ -47,5 +65,14 @@ func TestGenerateNonTableCreateAndDelete(t *testing.T) {
 	}
 	if !strings.Contains(sqlText, "DROP PROCEDURE IF EXISTS `p_old`;") {
 		t.Fatalf("esperava DROP PROCEDURE, recebi: %s", sqlText)
+	}
+	if !strings.Contains(sqlText, "CREATE TABLE clientes (id INT);") {
+		t.Fatalf("esperava CREATE TABLE, recebi: %s", sqlText)
+	}
+	if strings.Contains(sqlText, "DROP TABLE IF EXISTS `empresa`;") {
+		t.Fatalf("não esperava DROP TABLE, recebi: %s", sqlText)
+	}
+	if !strings.Contains(sqlText, "alter table empresa add column criado_em timestamp null;") {
+		t.Fatalf("esperava ALTER TABLE, recebi: %s", sqlText)
 	}
 }

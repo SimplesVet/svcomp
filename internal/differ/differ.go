@@ -90,6 +90,9 @@ func (g *Generator) sqlForTableDiff(ctx context.Context, diff types.DiffResult, 
 		}
 
 		// Fallback seguro quando o schemadiff não consegue gerar o ALTER.
+		if err != nil {
+			fmt.Printf("differ: aviso: não foi possível gerar ALTER TABLE para %s usando schemadiff. Um DROP foi gerado: %v\n", name, err)
+		}
 		return fmt.Sprintf("DROP TABLE IF EXISTS %s;\n%s", quoteIdent(name), ensureSemicolon(src.Definition)), nil
 	default:
 		return "", fmt.Errorf("differ: ação inválida para tabela %s: %s", name, diff.Action)
