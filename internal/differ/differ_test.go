@@ -76,3 +76,58 @@ func TestGenerateNonTableCreateAndDelete(t *testing.T) {
 		t.Fatalf("esperava ALTER TABLE, recebi: %s", sqlText)
 	}
 }
+
+func TestSplitAlterForFKConflict(t *testing.T) {
+	// Simula o caso reportado: schemadiff gera um ALTER TABLE que faz
+	// DROP FOREIGN KEY fk_x e ADD CONSTRAINT fk_x na mesma instrução,
+	// causando o erro MySQL 1826.
+	alterSQL := "alter table ajuda " +
+		"drop foreign key fk_ajuda_documentacao, " +
+		"drop key ak_ajuda_ajudachave, " +
+		"modify column ajudachave varchar(40) not null, " +
+		"add constraint fk_ajuda_documentacao foreign key (documentacao_id) references documentacao (documentacao_id)"
+
+	result := splitAlterForFKConflict(alterSQL)
+
+	parts := strings.Split(strings.TrimSpace(result), "\n")
+	if len(parts) != 2 {
+		t.Fatalf("esperava 2 instruções separadas, mas recebi %d: %s", len(parts), result)
+	}
+
+	stmt1 := strings.ToLower(parts[0])
+	stmt2 := strings.ToLower(parts[1])
+
+	if !strings.Contains(stmt1, "drop foreign key") {
+		t.Errorf("1º statement deveria conter DROP FOREIGN KEY: %s", stmt1)
+	}
+	if !strings.Contains(stmt1, "drop key") {
+		t.Errorf("1º statement deveria conter DROP KEY: %s", stmt1)
+	}
+	if strings.Contains(stmt1, "add constraint") {
+		t.Errorf("1º statement não deveria conter ADD CONSTRAINT: %s", stmt1)
+	}
+
+	if strings.Contains(stmt2, "drop foreign key") {
+		t.Errorf("2º statement não deveria conter DROP FOREIGN KEY: %s", stmt2)
+	}
+	if !strings.Contains(stmt2, "modify column") {
+		t.Errorf("2º statement deveria conter MODIFY COLUMN: %s", stmt2)
+	}
+	if !strings.Contains(stmt2, "add constraint fk_ajuda_documentacao foreign key") {
+		t.Errorf("2º statement deveria conter ADD CONSTRAINT com o mesmo nome: %s", stmt2)
+	}
+}
+
+func TestSplitAlterForFKConflict_NoConflict(t *testing.T) {
+	// Quando não há conflito de nomes, o ALTER TABLE não deve ser dividido.
+	alterSQL := "alter table produtos " +
+		"drop foreign key fk_categoria, " +
+		"add constraint fk_fornecedor foreign key (fornecedor_id) references fornecedores (id)"
+
+	result := splitAlterForFKConflict(alterSQL)
+
+	parts := strings.Split(strings.TrimSpace(result), "\n")
+	if len(parts) != 1 {
+		t.Fatalf("sem conflito de nomes: esperava 1 instrução, recebi %d: %s", len(parts), result)
+	}
+}
