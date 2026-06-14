@@ -3,11 +3,10 @@ package differ
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
+
+	"vitess.io/vitess/go/vt/schemadiff"
 
 	"github.com/simplesvet/svcomp/pkg/types"
 )
@@ -81,7 +80,7 @@ func (g *Generator) sqlForTableDiff(ctx context.Context, diff types.DiffResult, 
 			return "", fmt.Errorf("differ: tabela %s sem definição source/target para update", name)
 		}
 
-		alterSQL, err := g.diffTableUsingCLI(ctx, tgt.Definition, src.Definition)
+		alterSQL, err := diffTableUsingPackage(tgt.Definition, src.Definition)
 		if err == nil && strings.TrimSpace(alterSQL) != "" {
 			return ensureSemicolon(alterSQL), nil
 		}
@@ -90,35 +89,23 @@ func (g *Generator) sqlForTableDiff(ctx context.Context, diff types.DiffResult, 
 			return "", nil
 		}
 
-		// Fallback seguro quando o schemadiff CLI não está disponível.
+		// Fallback seguro quando o schemadiff não consegue gerar o ALTER.
 		return fmt.Sprintf("DROP TABLE IF EXISTS %s;\n%s", quoteIdent(name), ensureSemicolon(src.Definition)), nil
 	default:
 		return "", fmt.Errorf("differ: ação inválida para tabela %s: %s", name, diff.Action)
 	}
 }
 
-func (g *Generator) diffTableUsingCLI(ctx context.Context, sourceTableDDL, targetTableDDL string) (string, error) {
-	tmpDir, err := os.MkdirTemp("", "svcomp-schemadiff-*")
+func diffTableUsingPackage(tgtDDL, srcDDL string) (string, error) {
+	env := schemadiff.NewTestEnv()
+	diff, err := schemadiff.DiffCreateTablesQueries(env, tgtDDL, srcDDL, schemadiff.EmptyDiffHints())
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("differ: schemadiff: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
-
-	sourceFile := filepath.Join(tmpDir, "source.sql")
-	targetFile := filepath.Join(tmpDir, "target.sql")
-	if err := os.WriteFile(sourceFile, []byte(ensureSemicolon(sourceTableDDL)), 0o600); err != nil {
-		return "", err
+	if diff == nil || diff.IsEmpty() {
+		return "", nil
 	}
-	if err := os.WriteFile(targetFile, []byte(ensureSemicolon(targetTableDDL)), 0o600); err != nil {
-		return "", err
-	}
-
-	cmd := exec.CommandContext(ctx, "schemadiff", "diff-table", "--source", sourceFile, "--target", targetFile)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
+	return diff.StatementString(), nil
 }
 
 func sqlForNonTable(diff types.DiffResult) string {
