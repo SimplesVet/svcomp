@@ -1,4 +1,5 @@
 BINARY=svcomp
+VERSION?=dev
 GO=go
 GOTOOLCHAIN?=local
 DOCKER_COMPOSE?=docker compose
@@ -8,15 +9,17 @@ INTEGRATION_TARGET_DSN?=root:root@tcp(127.0.0.1:3308)/svcomp_target?parseTime=tr
 
 .PHONY: build build-all test test-integration integration-up integration-down clean-integration integration-reset integration-restore
 
+LDFLAGS=-ldflags "-X main.version=$(VERSION)"
+
 build:
-	$(GO) build -o bin/$(BINARY) ./cmd/svcomp
+	$(GO) build $(LDFLAGS) -o bin/$(BINARY) ./cmd/svcomp
 
 build-all:
 	mkdir -p dist
-	GOOS=linux GOARCH=amd64 $(GO) build -o dist/$(BINARY)-linux-amd64 ./cmd/svcomp
-	GOOS=linux GOARCH=arm64 $(GO) build -o dist/$(BINARY)-linux-arm64 ./cmd/svcomp
-	GOOS=darwin GOARCH=amd64 $(GO) build -o dist/$(BINARY)-darwin-amd64 ./cmd/svcomp
-	GOOS=windows GOARCH=amd64 $(GO) build -o dist/$(BINARY)-windows-amd64.exe ./cmd/svcomp
+	GOOS=linux GOARCH=amd64 $(GO) build $(LDFLAGS) -o dist/$(BINARY)-$(VERSION)-linux-amd64 ./cmd/svcomp
+	GOOS=linux GOARCH=arm64 $(GO) build $(LDFLAGS) -o dist/$(BINARY)-$(VERSION)-linux-arm64 ./cmd/svcomp
+	GOOS=darwin GOARCH=amd64 $(GO) build $(LDFLAGS) -o dist/$(BINARY)-$(VERSION)-darwin-amd64 ./cmd/svcomp
+	GOOS=windows GOARCH=amd64 $(GO) build $(LDFLAGS) -o dist/$(BINARY)-$(VERSION)-windows-amd64.exe ./cmd/svcomp
 
 test:
 	GOTOOLCHAIN=$(GOTOOLCHAIN) $(GO) clean -cache -testcache
